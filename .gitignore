@@ -1,0 +1,4 @@
+*.swp
+*.mod
+*.out
+output/*.png
