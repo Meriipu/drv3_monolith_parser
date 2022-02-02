@@ -33,10 +33,10 @@ def load_templates():
   empty3 = load('templates/empty3.png')
   return silver, pink, gold, plat, empty1, empty2, empty3
 
-def get_screenshot(example_path=False):
-  # if example_path is provided, load that instead of taking a screenshot
-  if example:
-    image = Image.open("example.png").convert("RGB")
+def get_screenshot(use_example=False):
+  # if use_example is True, load the instead of taking a screenshot
+  if use_example:
+    image = Image.open("examples/ex05.png").convert("RGB")
     arr = np.asarray(image)
     arr = cv.cvtColor(arr, mode)
     return arr
@@ -85,7 +85,6 @@ def find(arr):
       cv.rectangle(copy, (pt[0]+2, pt[1]+2), (pt[0] + w-2, pt[1] + h-2), colour, 2)
       # store the point for later - in the order x,y,id
       points.append((pt[0], pt[1], id))
-    cv.imwrite("output/dangan_mindmine_puzzle_res.png", copy)
 
   silver,pink,gold,plat,empty1,empty2,empty3 = load_templates()
   points = []
@@ -103,6 +102,9 @@ def find(arr):
   _find(gold, (0, 255, 255), 3)
   _find(plat, (255, 255, 0), 4)
 
+  # save the reference image
+  cv.imwrite("output/dangan_mindmine_puzzle_res.png", copy)
+
   startx = min(points, key=lambda x: x[0])[0]
   starty = min(points, key=lambda x: x[1])[1]
   stopx = max(points, key=lambda x: x[0])[0] + silver.shape[1]
@@ -117,6 +119,8 @@ def find(arr):
 
   # round down each coordinate to its left/top edge and consider that the
   # location of the block in the grid. Then store the colour of the block.
+  # MULTIPLE entries may be present for each cell (especially for empty cells),
+  # but unless the multiple entries are different it should not matter.
   map = np.zeros((num_y, num_x), dtype=np.uint8)
   block_or_empty = np.ones((num_y, num_x), dtype=np.uint8)
   for ptx,pty,id in points:
@@ -124,6 +128,13 @@ def find(arr):
     pty = pty-starty
     i = ptx//silver.shape[1]
     j = pty//silver.shape[0]
+    # I should probably have added a check for this from the start, just incase.
+    if (map[j,i] != 0 and id != 0 and map[j,i] != id):
+      print("WARNING: The parser may have classified a cell incorrectly")
+      print("         Already had colour: {c1},  new colour: {c2}".format(c1=map[j,i], c2=id))
+      print("         (row: {row}, column: {col})".format(row=j+1, col=i+1))
+      input("Press [return] to continue (but the result will likely be wrong): ")
+      #breakpoint()
     map[j,i] = id
     block_or_empty[j,i] = 0
 
