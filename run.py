@@ -1,19 +1,24 @@
 import sys
 import os
-#import ctypes
-import subprocess
 import numpy as np
 import cv2 as cv
 from PIL import Image
-from io import BytesIO
+#import subprocess
+#from io import BytesIO
 
+# Configure the position of the game on the screen here, for use with taking
+#   WARNING: the templates are resolution-specific, so a different resolution than
+#            1280x800 (with letterboxing) or 1280x720 (without letterboxing) will
+#            almost certainly not work without AT LEAST also replacing the templates.
 game_x0, game_y0 = 640,0
 game_xn, game_yn = 1919,799
+
 
 game_w,game_h = (game_xn-game_x0)+1, (game_yn-game_y0)+1
 mode = cv.COLOR_RGB2BGR
 
 def load_templates():
+  """templates for each block for use with template-matching"""
   def load(path):
     image = Image.open(path).convert("RGB")
     arr = np.asarray(image)
@@ -28,12 +33,14 @@ def load_templates():
   empty3 = load('templates/empty3.png')
   return silver, pink, gold, plat, empty1, empty2, empty3
 
-def get_screenshot(example=False):
+def get_screenshot(example_path=False):
+  # if example_path is provided, load that instead of taking a screenshot
   if example:
     image = Image.open("example.png").convert("RGB")
     arr = np.asarray(image)
     arr = cv.cvtColor(arr, mode)
     return arr
+  # if a path is given as a command line argument, use that instead of taking a screenshot
   elif len(sys.argv) > 1:
     path = sys.argv[1]
     assert os.path.exists(path)
@@ -43,27 +50,31 @@ def get_screenshot(example=False):
     arr = np.asarray(image)
     arr = cv.cvtColor(arr, mode)
     return arr
-
-
-  assert type(game_x0) == int
-  assert type(game_y0) == int
-  assert type(game_w) == int
-  assert type(game_h) == int
-  coords = f"{game_x0},{game_y0},{game_w},{game_h}"
-  # the mouse cursor might still be captured despite the request not to, so moving
-  # it to the side of the screen before requesting the screenshot is a good idea.
-  cmd = ['scrot', '-a', coords, '-']
-  bytes = subprocess.check_output(cmd)
-
-  stream = BytesIO(bytes)
-  image = Image.open(stream).convert("RGB")
-  stream.close()
-  arr = np.asarray(image)
-  arr = cv.cvtColor(arr, mode)
-
-  return arr
+  # otherwise, it is necessary to take a screenshot.
+  # This will NOT work if you do not have scrot installed, and will probably not work
+  # on anything but linux/X11.
+  else:
+    print("a screenshot should be provided as a command-line-argument")
+    exit()
+#    assert type(game_x0) == int
+#    assert type(game_y0) == int
+#    assert type(game_w) == int
+#    assert type(game_h) == int
+#    coords = f"{game_x0},{game_y0},{game_w},{game_h}"
+#    # the mouse cursor might still be captured despite the request not to, so moving
+#    # it to the side of the screen before requesting the screenshot is a good idea.
+#    cmd = ['scrot', '-a', coords, '-']
+#    bytes = subprocess.check_output(cmd)
+#
+#    stream = BytesIO(bytes)
+#    image = Image.open(stream).convert("RGB")
+#    stream.close()
+#    arr = np.asarray(image)
+#    arr = cv.cvtColor(arr, mode)
+#    return arr
 
 def find(arr):
+  """use template-matching to find occurences of each block"""
   def _find(template, colour, id, thresh = 0.95):
     res = cv.matchTemplate(arr, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= thresh)
@@ -97,11 +108,15 @@ def find(arr):
   stopx = max(points, key=lambda x: x[0])[0] + silver.shape[1]
   stopy = max(points, key=lambda x: x[1])[1] + silver.shape[0]
 
-  # this should probably be correct but if there is padding not exactly
+  # this should probably be correct but if there is padding not exactly so
+  # theoretically for boards larger than 22x11 it might stop working at some
+  # point.
   w,h = (stopx-startx)+1, (stopy-starty)+1
   num_x = w//silver.shape[1]
   num_y = h//silver.shape[0]
 
+  # round down each coordinate to its left/top edge and consider that the
+  # location of the block in the grid. Then store the colour of the block.
   map = np.zeros((num_y, num_x), dtype=np.uint8)
   block_or_empty = np.ones((num_y, num_x), dtype=np.uint8)
   for ptx,pty,id in points:
@@ -112,14 +127,14 @@ def find(arr):
     map[j,i] = id
     block_or_empty[j,i] = 0
 
-  # Spaces not detected as blocks or empty most likely are correctly identified
-  # treasures. Around each such treasure space reserve a 3x3 area that has high
-  # priority for clearing (because empty-detection is not perfect, and this
+  # Spaces not detected as blocks-or-empty most likely are correctly identified
+  # (parts of) treasures. Around each such treasure space reserve a 3x3 area that
+  # has high priority for clearing (because empty-detection is not perfect, and this
   # reserved space might be obscured by blocks).
   kernel = np.ones((3,3), dtype=np.uint8)
   neighbourhood = cv.dilate(block_or_empty, kernel=kernel)
   # Remove empty spaces from the reserved area for clarity (but it should not
-  # have any impact on the implementation).
+  # have any impact on the solver-implementation).
   block_or_empty = np.where(
     np.logical_or(
       np.logical_and(neighbourhood == 1, map > 0),
@@ -128,22 +143,19 @@ def find(arr):
     1,
     0
   )
-
-  return map, block_or_empty, num_x, num_y, 4 # <-- assume 4 colours
-
-def get_and_perform_action(cat, num_y):
-  action = input("next: ") + "\n"
-  print(action, file=cat.stdin, flush=True)
-  for i in range(num_y):
-    print(cat.stdout.readline(), end='')
+  return map, block_or_empty, num_x, num_y, 4 # <-- assume 4 colours for now
 
 def main():
   arr = get_screenshot()
   map, mask, num_x, num_y, colours = find(arr)
-  s1 = f"{num_x} {num_y} {colours}\n"
+
+  s1 = ""
+  # size information
+  #s1 = f"{num_x} {num_y} {colours}\n"
   for row in map:
     s1 += "".join(str(x) for x in row) + "\n"
   s1 = s1 + "\n"
+  tmp = s1
 
   s2 = ""
   for row in mask:
@@ -153,18 +165,13 @@ def main():
 
   s1 = s1 + s2
   print(s1)
-  cmd = ["./mindmine.out"]
-  PIPE = subprocess.PIPE
-  with subprocess.Popen(cmd, stdout=PIPE, stdin=PIPE, universal_newlines=True, bufsize=1) as cat:
-    print(s1, file=cat.stdin, flush=True)
-    for i in range(1+num_y+1):
-      print(cat.stdout.readline(), end='')
-    while True:
-      should_quit = get_and_perform_action(cat, num_y)
-      if should_quit:
-        exit()
 
-#  p.stdin.write("poop".encode("utf8"))
+  # if necessary this could be written to its own file instead to avoid
+  # copying-pasting over and over for re-runs.
+  print("Alternative csv-format:")
+  for line in tmp.split("\n"):
+    print(",".join(line))
+
 
 if __name__ == '__main__':
   main()
