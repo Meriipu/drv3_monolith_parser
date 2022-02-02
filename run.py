@@ -54,7 +54,8 @@ def get_screenshot(use_example=False):
   # This will NOT work if you do not have scrot installed, and will probably not work
   # on anything but linux/X11.
   else:
-    print("a screenshot should be provided as a command-line-argument")
+    print("a screenshot should be provided as a command-line-argument, for example:")
+    print("  python3 run.py examples/ex03.png")
     exit()
 #    assert type(game_x0) == int
 #    assert type(game_y0) == int
