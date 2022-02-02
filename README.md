@@ -15,9 +15,15 @@ PIL's `Image.ImageGrab()` on windows.
 
 # Usage
 
-Usage: Edit the `game_x0, game_y0, game_xn, game_yn` variables in the first few
+Usage: If you have changed the program to take screenshots automatically, make sure to
+ddit the `game_x0, game_y0, game_xn, game_yn` variables in the first few
 lines of `run.py` to match the top left and bottom right corner of the game window
-(the resolution requirement still holds because of the template-images).
+(the resolution requirement still holds because of the template-images). 
+
+If you are not taking screenshots automatically but rather manually passing in the
+path to a screenshot, it is probably not necessary to specify the coordinates of the
+game window, but it IS necessary that the game window has the resolution mentioned in
+the introduction-section.
 
 Afterwards, run:
 
